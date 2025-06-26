@@ -1,0 +1,185 @@
+Of course. I have updated the Software Requirements Specification (SRS) to incorporate the new requirements for an external notification API and for displaying user-friendly UI messages.
+Here is the revised document. Changes from the previous version are marked for clarity.
+Software Requirements Specification (SRS)
+Project: Client Access Request Management System (CARMS)
+Version: 1.1 [UPDATED]
+Date: June 26, 2025
+Table of Contents
+ * Introduction
+   1.1. Purpose
+   1.2. Document Conventions
+   1.3. Intended Audience
+   1.4. Project Scope
+   1.5. Acronyms and Abbreviations
+ * Overall Description
+   2.1. Product Perspective
+   2.2. Product Features
+   2.3. User Classes and Characteristics
+   2.4. Operating Environment
+   2.5. Design and Implementation Constraints
+   2.6. Assumptions and Dependencies
+ * System Features (Functional Requirements)
+   3.1. User Authentication and Authorization
+   3.2. Request Dashboard and Viewing
+   3.3. Request Creation
+   3.4. Request Submission and Workflow
+   3.5. Request Approval / Rejection
+   3.6. Request Editing
+   3.7. External Access API Integration
+   3.8. [NEW] Notification API Integration
+ * External Interface Requirements
+   4.1. User Interfaces
+   4.2. Software Interfaces
+ * Non-Functional Requirements
+   5.1. Performance Requirements
+   5.2. Security Requirements
+   5.3. Reliability and Availability
+   5.4. Maintainability and Testability
+   5.5. Usability
+ * Appendices
+   A. System Architecture Diagram
+   B. Preliminary Data Model
+   C. Request State Diagram
+1. Introduction
+... (sections 1.1 - 1.3 remain unchanged) ...
+1.4. Project Scope
+The scope of this project is to develop a web application that facilitates the entire lifecycle of a client access request.
+In-Scope:
+ * A React frontend for user interaction.
+ * A C# .NET backend to handle business logic and data persistence.
+ * Integration with external APIs to create, edit, and delete client access in a target system.
+ * [UPDATED] Integration with an external notification API to send status updates.
+ * A database to store request information and audit trails.
+ * User roles for requesters and approvers.
+ * Functionality to create, submit, view, approve, and reject requests.
+ * Automated username generation for SSO access types.
+Out-of-Scope:
+... (remains unchanged) ...
+1.5. Acronyms and Abbreviations
+... (remains unchanged) ...
+2. Overall Description
+2.1. Product Perspective
+CARMS is a self-contained internal utility application that interfaces with external APIs for both access provisioning and notifications. It will be an integral part of the internal operations toolkit, used by employees to manage access for external clients. It depends on the availability and stability of the external APIs it consumes. [UPDATED]
+2.2. Product Features
+ * Request Management: Users can create, edit, and submit access requests.
+ * Approval Workflow: Designated users can review, approve, or reject submitted requests.
+ * Automated Provisioning: Upon approval, the system automatically calls the appropriate external APIs to fulfill the request.
+ * Dashboard & History: Users can view the status of their requests and a history of all requests they have access to.
+ * Role-Based Access: The application will differentiate between standard users (Requesters) and privileged users (Approvers).
+ * [NEW] Automated Notifications: The system sends automated notifications to relevant users upon key status changes in the request lifecycle.
+... (sections 2.3 - 2.4 remain unchanged) ...
+2.5. Design and Implementation Constraints
+... (remains unchanged) ...
+2.6. Assumptions and Dependencies
+ * The external APIs for creating, editing, and deleting access are well-documented, stable, and available.
+ * [NEW] The external API for sending notifications is well-documented, stable, and available.
+ * The company has an existing identity provider (e.g., Active Directory, Okta) that can be used for user authentication (e.g., via OpenID Connect).
+ * The format for auto-incrementing SSO usernames is defined and agreed upon.
+ * Network policies will allow the BE server to communicate with the required external APIs.
+3. System Features (Functional Requirements)
+... (sections 3.1 - 3.3 remain unchanged) ...
+3.4. Request Submission and Workflow
+ * REQ-3.4.1: Users shall be able to save a request as a 'Draft' or 'Submit' it for approval.
+ * REQ-3.4.2: Upon submission, the request status shall change from 'Draft' to 'Submitted'.
+ * REQ-3.4.3: Once submitted, a request becomes read-only for the Requester unless it is rejected by an Approver.
+ * REQ-3.4.4: The system shall log the timestamp and user for every status change.
+ * [NEW] REQ-3.4.5: Upon successful submission, the system shall trigger a notification via the Notification API (see 3.8).
+3.5. Request Approval / Rejection
+ * REQ-3.5.1: An Approver shall be able to view 'Submitted' requests.
+ * REQ-3.5.2: An Approver shall have the options to 'Approve' or 'Reject' a submitted request.
+ * REQ-3.5.3: [UPDATED] If a request is approved, its status shall change to 'Approved'. The system shall trigger a notification via the Notification API (see 3.8) and then initiate the external access API call (see 3.7).
+ * REQ-3.5.4: [UPDATED] If a request is rejected, its status shall change to 'Rejected'. The Approver must provide a reason for rejection. The system shall then trigger a notification via the Notification API (see 3.8).
+ * REQ-3.5.5: The Requester shall be notified (e.g., via email or in-app notification) of the request's approval or rejection. This is fulfilled by REQ-3.5.3 and REQ-3.5.4.
+3.6. Request Editing
+... (remains unchanged) ...
+3.7. External Access API Integration
+ * REQ-3.7.1: Upon a request's status changing to 'Approved', the BE shall initiate an asynchronous process to call the appropriate external access API.
+ * REQ-3.7.2: The request status shall change to 'Processing' while the API call is in flight.
+ * REQ-3.7.3: The system shall map the CARMS Request Type to the correct external access API endpoint.
+ * REQ-3.7.4: The system must securely handle authentication credentials for the external APIs.
+ * REQ-3.7.5 (Success): [UPDATED] If the API call returns a success response, the request status shall be updated to 'Completed'. The system shall then trigger a notification via the Notification API (see 3.8).
+ * REQ-3.7.6 (Failure): [UPDATED] If the API call fails or returns an error, the request status shall be updated to 'Failed'. The system must log the error response from the external API and trigger a notification via the Notification API (see 3.8). An alert should also be sent to a System Administrator.
+3.8. [NEW] Notification API Integration
+ * REQ-3.8.1: The system shall call the external Notification API to send status updates for a request.
+ * REQ-3.8.2: Notification API calls shall be triggered when a request's status changes to:
+   * Submitted
+   * Approved
+   * Rejected
+   * Completed (on successful access provisioning)
+   * Failed (on unsuccessful access provisioning)
+ * REQ-3.8.3: The payload sent to the Notification API must contain relevant, contextual information, such as the Request ID, Client Name, new Status, and a link back to the request in CARMS.
+ * REQ-3.8.4: Calls to the Notification API shall be handled asynchronously and should not block the primary request workflow. Failures in the notification call should be logged but should not cause the primary request operation (e.g., approval, rejection) to fail.
+4. External Interface Requirements
+4.1. User Interfaces
+ * UI-4.1.1 (Dashboard): A clean, modern table-based view of all requests.
+ * UI-4.1.2 (Request Form): An intuitive form for creating and editing requests.
+ * UI-4.1.3 (Request Detail View): A read-only summary of a specific request and its audit trail.
+ * UI-4.1.4 (Responsiveness): The UI shall be responsive and function correctly on standard desktop screen resolutions.
+ * [NEW] UI-4.1.5 (User-Friendly Messaging): The UI must display all success, error, and informational messages in a friendly, human-readable format.
+   * Example Success: "Request #12345 for John Doe has been submitted successfully."
+   * Example Error: "Could not submit the request. The account number provided is invalid. Please correct it and try again."
+   * Example System Error: "An unexpected error occurred while processing your request. Our technical team has been notified. Please try again in a few minutes."
+4.2. Software Interfaces
+ * SI-4.2.1 (Internal API): The C# .NET BE will provide a RESTful API for the React FE.
+ * SI-4.2.2 (External Access API): The BE will act as a client to the external systems' APIs for access provisioning.
+ * SI-4.2.3 (Authentication): The BE will integrate with the corporate identity provider using a standard protocol like OIDC.
+ * [NEW] SI-4.2.4 (External Notification API): The BE will act as a client to the external Notification API. It will make authenticated HTTPS requests with a JSON payload to send notifications.
+5. Non-Functional Requirements
+... (sections 5.1 - 5.4 remain unchanged) ...
+5.5. Usability
+ * USE-5.5.1: The UI/UX must be intuitive for non-technical users, requiring minimal training.
+ * USE-5.5.2: [UPDATED] The application must provide clear, timely, and human-readable feedback to the user after every action. This feedback (e.g., success toasts, modal dialogs, inline error messages) must avoid technical jargon and clearly state the outcome of the user's action and any next steps, if applicable.
+6. Appendices
+A. System Architecture Diagram [UPDATED]
++----------------+      +-------------------------+      +-------------------+
+|                |      |                         |----->| External Access   |
+|   User Browser |      |   Internal Web Server   |      |        APIs       |
+| (React FE SPA) |<-+-->|      (C# .NET BE)       |      +-------------------+
+|                |  |   |                         |
++----------------+  |   +------------+------------+      +-------------------+
+                    |                |             `---->| External          |
+             HTTPS/REST              |                   | Notification API  |
+                    |                |                   +-------------------+
+                    |   +------------V------------+      +-------------------+
+                    |   |                         |      |                   |
+                    +-->|    Database Server      |<---->| Corporate         |
+                        | (SQL Server/PostgreSQL) |      | Identity Provider |
+                        |                         |      | (e.g., AD, Okta)  |
+                        +-------------------------+      +-------------------+
+
+B. Preliminary Data Model
+... (remains unchanged) ...
+C. Request State Diagram [UPDATED]
+(Annotations added to show notification triggers)
+            +----------+
+            |  Draft   |
+            +----------+
+                 | user submits
+                 v [Send Notification]
++------------+   +-----------+
+| Rejected   |<- | Submitted |
++------------+   +-----------+
+  ^ |              | approver approves
+  | | user edits & | [Send Notification]
+  | resubmits      |
+  +----------------+
+                 v
+            +-----------+
+            | Approved  |
+            +-----------+
+                 | system processes
+                 v
+            +------------+
+            | Processing |
+            +------------+
+                 |
+      +----------+-----------+
+      |                      |
+      v API call fails     v API call succeeds
++---------+              +-----------+
+| Failed  |              | Completed |
++---------+              +-----------+
+     |                        |
+     v [Send Notification]    v [Send Notification]
+
+
