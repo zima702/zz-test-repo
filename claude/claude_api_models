@@ -1,0 +1,283 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace CARMS.Models
+{
+public enum RequestStatus
+{
+Draft,
+Submitted,
+Approved,
+Rejected,
+Processing,
+Completed,
+Failed
+}
+
+```
+public enum AccessType
+{
+    SSO,
+    Database,
+    FTP,
+    API
+}
+
+public enum UserRole
+{
+    Requester,
+    Approver
+}
+
+public class User
+{
+    [Key]
+    public int Id { get; set; }
+    
+    [Required]
+    [StringLength(255)]
+    public string UserId { get; set; } // From identity provider
+    
+    [Required]
+    [StringLength(255)]
+    public string Name { get; set; }
+    
+    [Required]
+    [EmailAddress]
+    [StringLength(255)]
+    public string Email { get; set; }
+    
+    [Required]
+    public UserRole Role { get; set; }
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    
+    // Navigation properties
+    public virtual ICollection<Request> RequestsCreated { get; set; } = new List<Request>();
+    public virtual ICollection<Request> RequestsApproved { get; set; } = new List<Request>();
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+}
+
+public class Request
+{
+    [Key]
+    public int Id { get; set; }
+    
+    [Required]
+    [StringLength(255)]
+    public string ClientName { get; set; }
+    
+    [Required]
+    [StringLength(100)]
+    public string AccountNumber { get; set; }
+    
+    [Required]
+    public AccessType AccessType { get; set; }
+    
+    [StringLength(255)]
+    public string? GeneratedUsername { get; set; } // For SSO access types
+    
+    [StringLength(1000)]
+    public string? Description { get; set; }
+    
+    [Required]
+    public RequestStatus Status { get; set; } = RequestStatus.Draft;
+    
+    [Required]
+    public int RequesterId { get; set; }
+    
+    public int? ApproverId { get; set; }
+    
+    [StringLength(1000)]
+    public string? RejectionReason { get; set; }
+    
+    [StringLength(2000)]
+    public string? ExternalApiResponse { get; set; } // Store API response for troubleshooting
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? SubmittedAt { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public DateTime? RejectedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    
+    // Navigation properties
+    [ForeignKey("RequesterId")]
+    public virtual User Requester { get; set; }
+    
+    [ForeignKey("ApproverId")]
+    public virtual User? Approver { get; set; }
+    
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+}
+
+public class AuditLog
+{
+    [Key]
+    public int Id { get; set; }
+    
+    [Required]
+    public int RequestId { get; set; }
+    
+    [Required]
+    public int UserId { get; set; }
+    
+    [Required]
+    [StringLength(100)]
+    public string Action { get; set; } // Created, Submitted, Approved, Rejected, etc.
+    
+    [Required]
+    public RequestStatus FromStatus { get; set; }
+    
+    [Required]
+    public RequestStatus ToStatus { get; set; }
+    
+    [StringLength(1000)]
+    public string? Notes { get; set; }
+    
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    
+    // Navigation properties
+    [ForeignKey("RequestId")]
+    public virtual Request Request { get; set; }
+    
+    [ForeignKey("UserId")]
+    public virtual User User { get; set; }
+}
+
+// DTOs for API responses
+public class RequestDto
+{
+    public int Id { get; set; }
+    public string ClientName { get; set; }
+    public string AccountNumber { get; set; }
+    public string AccessType { get; set; }
+    public string? GeneratedUsername { get; set; }
+    public string? Description { get; set; }
+    public string Status { get; set; }
+    public string RequesterName { get; set; }
+    public string? ApproverName { get; set; }
+    public string? RejectionReason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public DateTime? RejectedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class CreateRequestDto
+{
+    [Required]
+    [StringLength(255)]
+    public string ClientName { get; set; }
+    
+    [Required]
+    [StringLength(100)]
+    public string AccountNumber { get; set; }
+    
+    [Required]
+    public AccessType AccessType { get; set; }
+    
+    [StringLength(1000)]
+    public string? Description { get; set; }
+}
+
+public class UpdateRequestDto
+{
+    [Required]
+    [StringLength(255)]
+    public string ClientName { get; set; }
+    
+    [Required]
+    [StringLength(100)]
+    public string AccountNumber { get; set; }
+    
+    [Required]
+    public AccessType AccessType { get; set; }
+    
+    [StringLength(1000)]
+    public string? Description { get; set; }
+}
+
+public class ApprovalDecisionDto
+{
+    [Required]
+    public bool Approved { get; set; }
+    
+    [StringLength(1000)]
+    public string? RejectionReason { get; set; }
+}
+
+public class AuditLogDto
+{
+    public int Id { get; set; }
+    public string UserName { get; set; }
+    public string Action { get; set; }
+    public string FromStatus { get; set; }
+    public string ToStatus { get; set; }
+    public string? Notes { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+
+public class ApiResponse<T>
+{
+    public bool Success { get; set; }
+    public string Message { get; set; }
+    public T? Data { get; set; }
+    public List<string>? Errors { get; set; }
+
+    public static ApiResponse<T> SuccessResult(T data, string message = "Operation completed successfully")
+    {
+        return new ApiResponse<T>
+        {
+            Success = true,
+            Message = message,
+            Data = data
+        };
+    }
+
+    public static ApiResponse<T> ErrorResult(string message, List<string>? errors = null)
+    {
+        return new ApiResponse<T>
+        {
+            Success = false,
+            Message = message,
+            Errors = errors ?? new List<string>()
+        };
+    }
+}
+
+// External API DTOs
+public class ExternalAccessRequest
+{
+    public string ClientName { get; set; }
+    public string AccountNumber { get; set; }
+    public string AccessType { get; set; }
+    public string? Username { get; set; }
+    public string RequestId { get; set; }
+}
+
+public class ExternalAccessResponse
+{
+    public bool Success { get; set; }
+    public string Message { get; set; }
+    public string? AccessId { get; set; }
+    public Dictionary<string, object>? AdditionalData { get; set; }
+}
+
+public class NotificationRequest
+{
+    public string RequestId { get; set; }
+    public string ClientName { get; set; }
+    public string Status { get; set; }
+    public string RequesterEmail { get; set; }
+    public string? ApproverEmail { get; set; }
+    public string RequestUrl { get; set; }
+    public string? RejectionReason { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+```
+
+}
