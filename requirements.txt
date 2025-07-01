@@ -1,237 +1,304 @@
+Of course. Here is the updated Software Requirements Specification (SRS) with the requested changes for notifications and UI messages.
 Of course. Here is a comprehensive Software Requirements Specification (SRS) for the client access request application.
-
 Software Requirements Specification (SRS)
 Project: Client Access Request Management System (CARMS)
-Version: 1.0 Date: June 26, 2025
-
+Version: 1.1 Date: July 1, 2025
 Table of Contents
-1. Introduction 1.1. Purpose 1.2. Document Conventions 1.3. Intended Audience 1.4. Project Scope 1.5. Acronyms and Abbreviations
-2. Overall Description 2.1. Product Perspective 2.2. Product Features 2.3. User Classes and Characteristics 2.4. Operating Environment 2.5. Design and Implementation Constraints 2.6. Assumptions and Dependencies
-3. System Features (Functional Requirements) 3.1. User Authentication and Authorization 3.2. Request Dashboard and Viewing 3.3. Request Creation 3.4. Request Submission and Workflow 3.5. Request Approval / Rejection 3.6. Request Editing 3.7. External API Integration
-4. External Interface Requirements 4.1. User Interfaces 4.2. Software Interfaces
-5. Non-Functional Requirements 5.1. Performance Requirements 5.2. Security Requirements 5.3. Reliability and Availability 5.4. Maintainability and Testability 5.5. Usability
-6. Appendices A. System Architecture Diagram B. Preliminary Data Model C. Request State Diagram
-
-1. Introduction
-1.1. Purpose
-This document provides a detailed specification for the Client Access Request Management System (CARMS). The purpose of CARMS is to automate and streamline the process of requesting, approving, and provisioning client access for an external system. It will replace the current manual workflow, aiming to reduce processing time, minimize human error, and provide a transparent audit trail for all access requests.
-1.2. Document Conventions
-This document follows standard SRS formatting. Mathematical and technical notations are formatted using LaTeX, enclosed in $ delimiters.
-1.3. Intended Audience
-This document is intended for project stakeholders, including but not limited to:
-* Project Managers
-* Software Developers (Frontend and Backend)
-* Quality Assurance (QA) Engineers
-* System Administrators
-* Business Analysts
-1.4. Project Scope
-The scope of this project is to develop a web application that facilitates the entire lifecycle of a client access request.
-In-Scope:
-* A React frontend for user interaction.
-* A C# .NET backend to handle business logic and data persistence.
-* Integration with external APIs to create, edit, and delete client access in a target system.
-* A database to store request information and audit trails.
-* User roles for requesters and approvers.
-* Functionality to create, submit, view, approve, and reject requests.
-* Automated username generation for SSO access types.
-Out-of-Scope:
-* Management or administration of the external target system itself.
-* User management for CARMS (assumed to be handled by an existing corporate identity provider).
-* Billing or cost-tracking features.
-* Direct public internet access; the application is for internal use only.
-1.5. Acronyms and Abbreviations
-* API: Application Programming Interface
-* BE: Backend
-* CARMS: Client Access Request Management System
-* FE: Frontend
-* HTTP: Hypertext Transfer Protocol
-* JSON: JavaScript Object Notation
-* RBAC: Role-Based Access Control
-* REST: Representational State Transfer
-* SRS: Software Requirements Specification
-* SSO: Single Sign-On
-* UI: User Interface
-2. Overall Description
-2.1. Product Perspective
-CARMS is a self-contained internal utility application that interfaces with one or more external APIs. It will be an integral part of the internal operations toolkit, used by employees to manage access for external clients. It depends on the availability and stability of the external APIs it consumes.
-2.2. Product Features
-The major features of CARMS are:
-* Request Management: Users can create, edit, and submit access requests.
-* Approval Workflow: Designated users can review, approve, or reject submitted requests.
-* Automated Provisioning: Upon approval, the system automatically calls the appropriate external APIs to fulfill the request.
-* Dashboard & History: Users can view the status of their requests and a history of all requests they have access to.
-* Role-Based Access: The application will differentiate between standard users (Requesters) and privileged users (Approvers).
-2.3. User Classes and Characteristics
-* Requester (Standard User): Any internal employee who needs to request client access. They can create, submit, and view their own requests.
-* Approver (Privileged User): Typically a manager or team lead responsible for authorizing access. They can do everything a Requester can, plus approve or reject requests submitted by others. They can view all requests within their purview.
-* Administrator (System Admin): A technical user responsible for maintaining the application. They have access to system logs, configurations, and can manage user roles.
-2.4. Operating Environment
-* The application will be hosted on the company's internal network infrastructure.
-* The FE will be a Single Page Application (SPA) running in modern web browsers (Chrome, Firefox, Edge).
-* The BE (.NET) will run on a Windows or Linux server with access to the internal network and the internet (for external API calls).
-* A relational database (e.g., SQL Server, PostgreSQL) will be used for data persistence.
-2.5. Design and Implementation Constraints
-* Frontend Technology: React 18+ with TypeScript.
-* Backend Technology: C# with .NET 8+.
-* Architecture: The BE will expose a RESTful API for the FE. It should follow Clean Architecture principles and utilize design patterns such as the Repository Pattern and Dependency Injection.
-* Database: Entity Framework Core will be used as the Object-Relational Mapper (ORM).
-* Security: Communication between FE and BE must be over HTTPS. Sensitive data, such as external API keys, must be stored securely (e.g., Azure Key Vault, .NET Secret Manager).
-* Code Quality: The codebase must adhere to industry best practices, be well-documented, and include comprehensive test coverage.
-2.6. Assumptions and Dependencies
-* The external APIs for creating, editing, and deleting access are well-documented, stable, and available.
-* The company has an existing identity provider (e.g., Active Directory, Okta) that can be used for user authentication (e.g., via OpenID Connect).
-* The format for auto-incrementing SSO usernames is defined and agreed upon.
-* Network policies will allow the BE server to communicate with the required external APIs.
-3. System Features (Functional Requirements)
-3.1. User Authentication and Authorization
-* REQ-3.1.1: The system shall authenticate users against the corporate identity provider.
-* REQ-3.1.2: The system shall implement Role-Based Access Control (RBAC) to enforce permissions for Requesters and Approvers.
-* REQ-3.1.3: A user's role shall determine the actions they can perform and the data they can view.
-3.2. Request Dashboard and Viewing
-* REQ-3.2.1: Users shall see a dashboard listing all requests they are permitted to view.
-* REQ-3.2.2: The dashboard shall display key information for each request: Request ID, Client Name, Request Type, Status, and Submission Date.
-* REQ-3.2.3: Users shall be able to filter and sort the request list by any of the displayed columns.
-* REQ-3.2.4: Users shall be able to click on a request in the dashboard to view its full details.
-3.3. Request Creation
-* REQ-3.3.1: A Requester shall be able to initiate a new access request.
-* REQ-3.3.2: The request creation form shall capture the following information:
-    * Manager Name (string, required)
-    * Account Number (string, required)
-    * Client Name (string, required)
-    * Client Email (email format, required)
-    * Access Type (dropdown: 'SSO', 'Direct Access', required)
-    * Request Type (dropdown: 'Create Access', 'Edit Access', 'Delete Access', required)
-    * Username (string, conditionally editable/visible)
-* REQ-3.3.3 (SSO Logic): If Access Type is 'SSO', the Username field shall be read-only and hidden or disabled during initial creation. The system will generate it upon submission.
-* REQ-3.3.4 (SSO Generation): The generated SSO username shall follow the format SSO_USER_{N} where $N$is an auto-incrementing integer. The system must ensure that $N$ is unique and generated atomically to prevent race conditions.
-* REQ-3.3.5 (Direct Access Logic): If Access Type is 'Direct Access', the Username field shall be an editable text input and required.
-* REQ-3.3.6: The system shall perform input validation on all fields to ensure data integrity (e.g., required fields are filled, email has a valid format).
-3.4. Request Submission and Workflow
-* REQ-3.4.1: Users shall be able to save a request as a 'Draft' or 'Submit' it for approval.
-* REQ-3.4.2: Upon submission, the request status shall change from 'Draft' to 'Submitted'.
-* REQ-3.4.3: Once submitted, a request becomes read-only for the Requester unless it is rejected by an Approver.
-* REQ-3.4.4: The system shall log the timestamp and user for every status change.
-3.5. Request Approval / Rejection
-* REQ-3.5.1: An Approver shall be able to view 'Submitted' requests.
-* REQ-3.5.2: An Approver shall have the options to 'Approve' or 'Reject' a submitted request.
-* REQ-3.5.3: If a request is approved, its status shall change to 'Approved', and the system shall trigger the external API call (see 3.7).
-* REQ-3.5.4: If a request is rejected, its status shall change to 'Rejected'. The Approver must provide a reason for rejection.
-* REQ-3.5.5: The Requester shall be notified (e.g., via email or in-app notification) of the request's approval or rejection.
-3.6. Request Editing
-* REQ-3.6.1: A user shall be able to edit a request that is in 'Draft' status.
-* REQ-3.6.2: If a request is 'Rejected', the original Requester shall be able to edit it and resubmit it for approval.
-* REQ-3.6.3: When editing a request, only the following fields shall be mutable: Username (for Direct Access), Access Type, and Request Type. Other core client information shall remain locked to maintain integrity.
-* REQ-3.6.4: Editing shall be disabled for requests in 'Submitted', 'Approved', 'Processing', or 'Completed' states.
-3.7. External API Integration
-* REQ-3.7.1: Upon a request's status changing to 'Approved', the BE shall initiate an asynchronous process to call the appropriate external API.
-* REQ-3.7.2: The request status shall change to 'Processing' while the API call is in flight.
-* REQ-3.7.3: The system shall map the CARMS Request Type to the correct external API endpoint:
-    * 'Create Access' -> Calls External API for User Creation.
-    * 'Edit Access' -> Calls External API for User Modification.
-    * 'Delete Access' -> Calls External API for User Deletion.
-* REQ-3.7.4: The system must securely handle authentication credentials (e.g., API keys, OAuth tokens) for the external APIs.
-* REQ-3.7.5 (Success): If the API call returns a success response, the request status shall be updated to 'Completed'.
-* REQ-3.7.6 (Failure): If the API call fails or returns an error, the request status shall be updated to 'Failed'. The system must log the error response from the external API for troubleshooting. An alert should be sent to a System Administrator.
-4. External Interface Requirements
-4.1. User Interfaces
-* UI-4.1.1 (Dashboard): A clean, modern table-based view of all requests with filtering, sorting, and pagination capabilities.
-* UI-4.1.2 (Request Form): An intuitive form for creating and editing requests, featuring clear labels, validation messages, and conditional field visibility based on user selections.
-* UI-4.1.3 (Request Detail View): A read-only summary of a specific request, including its complete data and a chronological history of status changes (audit trail).
-* UI-4.1.4 (Responsiveness): The UI shall be responsive and function correctly on standard desktop screen resolutions.
-4.2. Software Interfaces
-* SI-4.2.1 (Internal API): The C# .NET BE will provide a RESTful API for the React FE. All data exchange will use the JSON format. The API will be secured and accessible only from the internal network.
-* SI-4.2.2 (External APIs): The BE will act as a client to the external systems' APIs. It must be capable of making authenticated HTTPS requests and parsing JSON or XML responses as required by the external APIs.
-* SI-4.2.3 (Authentication): The BE will integrate with the corporate identity provider using a standard protocol like OpenID Connect (OIDC) to authenticate users.
-5. Non-Functional Requirements
-5.1. Performance Requirements
-* PERF-5.1.1: API response times for all interactive operations (fetching lists, viewing details) shall be less than 500ms for the 95th percentile.
-* PERF-5.1.2: FE page load times for any page shall be under 3 seconds on the corporate network.
-* PERF-5.1.3: The system must be able to handle the projected load of 100 requests per day without performance degradation. Asynchronous processing of external API calls will ensure the UI remains responsive under load.
-5.2. Security Requirements
-* SEC-5.2.1: All traffic between the client (browser), FE, and BE shall be encrypted using TLS 1.2 or higher.
-* SEC-5.2.2: The application must implement robust RBAC to prevent unauthorized access to data or functionality.
-* SEC-5.2.3: All user inputs must be validated on both the FE and BE to prevent injection attacks (e.g., XSS, SQL Injection).
-* SEC-5.2.4: External API credentials and other secrets must be stored in a secure vault (e.g., Azure Key Vault, HashiCorp Vault, or .NET Secret Manager) and not in configuration files or source code.
-* SEC-5.2.5: The application must follow OWASP Top 10 security best practices.
-5.3. Reliability and Availability
-* REL-5.3.1: The application should have an uptime of 99.5% during business hours.
-* REL-5.3.2: The system must include robust error handling and logging for both internal operations and external API interactions to facilitate quick diagnosis and recovery.
-* REL-5.3.3: The BE shall implement a retry mechanism with exponential backoff for transient failures when calling external APIs.
-5.4. Maintainability and Testability
-* MAIN-5.4.1: Both FE and BE codebases must be modular, well-documented, and follow established coding standards for their respective languages/frameworks.
-* MAIN-5.4.2 (BE Testing): The .NET backend must have a comprehensive suite of unit tests for business logic and integration tests for API endpoints and database interactions. A target code coverage of $>80%$ is required.
-* MAIN-5.4.3 (FE Testing): The React frontend must have unit tests for components and utility functions and integration tests for key user flows. A target code coverage of $>80%$ is required.
-* MAIN-5.4.4: The application should have configurable logging levels to assist in debugging.
-5.5. Usability
-* USE-5.5.1: The UI/UX must be intuitive for non-technical users, requiring minimal training.
-* USE-5.5.2: The application must provide clear feedback to the user after every action (e.g., success toasts, error messages, loading indicators).
-6. Appendices
-A. System Architecture Diagram
-+----------------+      +-------------------------+      +-------------------+
-|                |      |                         |      |                   |
-|   User Browser |      |   Internal Web Server   |      |   External APIs   |
-| (React FE SPA) |<-+-->|      (C# .NET BE)       |----->| (Client Access    |
-|                |  |   |                         |      |  System)          |
-+----------------+  |   +------------+------------+      +-------------------+
-                    |                |
-             HTTPS/REST              |
-                    |                |
-                    |   +------------V------------+      +-------------------+
-                    |   |                         |      |                   |
-                    +-->|    Database Server      |<---->| Corporate         |
-                        | (SQL Server/PostgreSQL) |      | Identity Provider |
-                        |                         |      | (e.g., AD, Okta)  |
-                        +-------------------------+      +-------------------+
-B. Preliminary Data Model
-A single Requests table could have the following schema:
-CREATE TABLE Requests (
-    Id INT PRIMARY KEY IDENTITY,
-    ManagerName NVARCHAR(100) NOT NULL,
-    AccountNumber NVARCHAR(50) NOT NULL,
-    ClientName NVARCHAR(100) NOT NULL,
-    ClientEmail NVARCHAR(255) NOT NULL,
-    AccessType NVARCHAR(20) NOT NULL, -- 'SSO' or 'Direct Access'
-    RequestType NVARCHAR(20) NOT NULL, -- 'Create', 'Edit', 'Delete'
-    Username NVARCHAR(100) NOT NULL,
-    Status NVARCHAR(20) NOT NULL, -- 'Draft', 'Submitted', 'Approved', 'Rejected', etc.
-    RejectionReason NVARCHAR(MAX) NULL,
-    RequesterId NVARCHAR(100) NOT NULL, -- User ID from Identity Provider
-    ApproverId NVARCHAR(100) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
-    UpdatedAt DATETIME2 NOT NULL DEFAULT GETDATE()
-);
-
--- Separate table for SSO username sequence to handle concurrency
-CREATE TABLE SsoSequence (
-    LastId INT NOT NULL
-);
-INSERT INTO SsoSequence (LastId) VALUES (0);
-C. Request State Diagram
-            +----------+
-            |  Draft   |
-            +----------+
-                 | user submits
-                 v
-+------------+   +-----------+
-| Rejected   |<- | Submitted |
-+------------+   +-----------+
-  ^ |              | approver approves
-  | | user edits & |
-  | resubmits      |
-  +----------------+
-                 v
-            +-----------+
-            | Approved  |
-            +-----------+
-                 | system processes
-                 v
-            +------------+
-            | Processing |
-            +------------+
-                 |
-      +----------+-----------+
-      |                      |
-      v API call fails     v API call succeeds
-+---------+              +-----------+
-| Failed  |              | Completed |
-+---------+              +-----------+
+1.	Introduction 1.1. Purpose 1.2.
+Document Conventions 1.3. Intended Audience 1.4. Project Scope 1.5. Acronyms and Abbreviations
+2.	Overall Description 2.1. Product Perspective 2.2. Product Features 2.3.
+User Classes and Characteristics 2.4. Operating Environment 2.5. Design and Implementation Constraints 2.6. Assumptions and Dependencies
+3.	System Features (Functional Requirements) 3.1.
+User Authentication and Authorization 3.2. Request Dashboard and Viewing 3.3. Request Creation 3.4. Request Submission and Workflow 3.5.
+Request Approval / Rejection 3.6. Request Editing 3.7. External API Integration
+4.	External Interface Requirements 4.1. User Interfaces 4.2.
+Software Interfaces
+5.	Non-Functional Requirements 5.1. Performance Requirements 5.2. Security Requirements 5.3. Reliability and Availability 5.4. Maintainability and Testability 5.5.
+Usability
+6.	Appendices A. System Architecture Diagram B. Preliminary Data Model C. Request State Diagram
+ * Introduction
+   1.1.
+   Purpose
+   This document provides a detailed specification for the Client Access Request Management System (CARMS).
+   The purpose of CARMS is to automate and streamline the process of requesting, approving, and provisioning client access for an external system.
+   It will replace the current manual workflow, aiming to reduce processing time, minimize human error, and provide a transparent audit trail for all access requests.
+   1.2. Document Conventions
+   This document follows standard SRS formatting. Mathematical and technical notations are formatted using LaTeX, enclosed in $ delimiters.
+   1.3. Intended Audience
+   This document is intended for project stakeholders, including but not limited to:
+   â¢	Project Managers
+   â¢	Software Developers (Frontend and Backend)
+   â¢	Quality Assurance (QA) Engineers
+   â¢	System Administrators
+   â¢	Business Analysts
+   1.4.
+   Project Scope
+   The scope of this project is to develop a web application that facilitates the entire lifecycle of a client access request.
+   In-Scope:
+   â¢	A React frontend for user interaction.
+   â¢	A C# .NET backend to handle business logic and data persistence.
+   â¢	Integration with external APIs to create, edit, and delete client access in a target system.
+   â¢	A database to store request information and audit trails.
+   â¢	User roles for requesters and approvers.
+   â¢	Functionality to create, submit, view, approve, and reject requests.
+   â¢	Automated username generation for SSO access types.
+   Out-of-Scope:
+   â¢	Management or administration of the external target system itself.
+   â¢	User management for CARMS (assumed to be handled by an existing corporate identity provider).
+   â¢	Billing or cost-tracking features.
+   â¢	Direct public internet access; the application is for internal use only.
+   1.5.
+   Acronyms and Abbreviations
+   â¢	API: Application Programming Interface
+   â¢	BE: Backend
+   â¢	CARMS: Client Access Request Management System
+   â¢	FE: Frontend
+   â¢	HTTP: Hypertext Transfer Protocol
+   â¢	JSON: JavaScript Object Notation
+   â¢	RBAC: Role-Based Access Control
+   â¢	REST: Representational State Transfer
+   â¢	SRS: Software Requirements Specification
+   â¢	SSO: Single Sign-On
+   â¢	UI: User Interface
+ * Overall Description
+   2.1.
+   Product Perspective
+   CARMS is a self-contained internal utility application that interfaces with one or more external APIs.
+   It will be an integral part of the internal operations toolkit, used by employees to manage access for external clients.
+   It depends on the availability and stability of the external APIs it consumes.
+   2.2.
+   Product Features
+   The major features of CARMS are:
+   â¢	Request Management: Users can create, edit, and submit access requests.
+   â¢	Approval Workflow: Designated users can review, approve, or reject submitted requests.
+   â¢	Automated Provisioning: Upon approval, the system automatically calls the appropriate external APIs to fulfill the request.
+   â¢	Dashboard & History: Users can view the status of their requests and a history of all requests they have access to.
+   â¢	Role-Based Access: The application will differentiate between standard users (Requesters) and privileged users (Approvers).
+   2.3.
+   User Classes and Characteristics
+   â¢	Requester (Standard User): Any internal employee who needs to request client access.
+   They can create, submit, and view their own requests.
+   â¢	Approver (Privileged User): Typically a manager or team lead responsible for authorizing access.
+   They can do everything a Requester can, plus approve or reject requests submitted by others.
+   They can view all requests within their purview.
+   â¢	Administrator (System Admin): A technical user responsible for maintaining the application.
+   They have access to system logs, configurations, and can manage user roles.
+   2.4.
+   Operating Environment
+   â¢	The application will be hosted on the company's internal network infrastructure.
+   â¢	The FE will be a Single Page Application (SPA) running in modern web browsers (Chrome, Firefox, Edge).
+   â¢	The BE (.NET) will run on a Windows or Linux server with access to the internal network and the internet (for external API calls).
+   â¢	A relational database (e.g., SQL Server, PostgreSQL) will be used for data persistence.
+   2.5.
+   Design and Implementation Constraints
+   â¢	Frontend Technology: React 18+ with TypeScript.
+   â¢	Backend Technology: C# with .NET 8+.
+   â¢	Architecture: The BE will expose a RESTful API for the FE.
+   It should follow Clean Architecture principles and utilize design patterns such as the Repository Pattern and Dependency Injection.
+   â¢	Database: Entity Framework Core will be used as the Object-Relational Mapper (ORM).
+   â¢	Security: Communication between FE and BE must be over HTTPS.
+   â¢	Sensitive data, such as external API keys, must be stored securely (e.g., Azure Key Vault, .NET Secret Manager).
+   â¢	Code Quality: The codebase must adhere to industry best practices, be well-documented, and include comprehensive test coverage.
+   2.6.
+   Assumptions and Dependencies
+   â¢	The external APIs for creating, editing, and deleting access are well-documented, stable, and available.
+   â¢	The company has an existing identity provider (e.g., Active Directory, Okta) that can be used for user authentication (e.g., via OpenID Connect).
+   â¢	An email service (e.g., SMTP server, cloud-based email API) is available for sending notifications.
+   â¢	The format for auto-incrementing SSO usernames is defined and agreed upon.
+   â¢	Network policies will allow the BE server to communicate with the required external APIs.
+ * System Features (Functional Requirements)
+   3.1.
+   User Authentication and Authorization
+   â¢	REQ-3.1.1: The system shall authenticate users against the corporate identity provider.
+   â¢	REQ-3.1.2: The system shall implement Role-Based Access Control (RBAC) to enforce permissions for Requesters and Approvers.
+   â¢	REQ-3.1.3: A user's role shall determine the actions they can perform and the data they can view.
+   3.2.
+   Request Dashboard and Viewing
+   â¢	REQ-3.2.1: Users shall see a dashboard listing all requests they are permitted to view.
+   â¢	REQ-3.2.2: The dashboard shall display key information for each request: Request ID, Client Name, Request Type, Status, and Submission Date.
+   â¢	REQ-3.2.3: Users shall be able to filter and sort the request list by any of the displayed columns.
+   â¢	REQ-3.2.4: Users shall be able to click on a request in the dashboard to view its full details.
+   3.3.
+   Request Creation
+   â¢	REQ-3.3.1: A Requester shall be able to initiate a new access request.
+   â¢	REQ-3.3.2: The request creation form shall capture the following information:
+   â¢	Manager Name (string, required)
+   â¢	Account Number (string, required)
+   â¢	Client Name (string, required)
+   â¢	Client Email (email format, required)
+   â¢	Access Type (dropdown: 'SSO', 'Direct Access', required)
+   â¢	Request Type (dropdown: 'Create Access', 'Edit Access', 'Delete Access', required)
+   â¢	Username (string, conditionally editable/visible)
+   â¢	REQ-3.3.3 (SSO Logic): If Access Type is 'SSO', the Username field shall be read-only and hidden or disabled during initial creation.
+   The system will generate it upon submission.
+   â¢	REQ-3.3.4 (SSO Generation): The generated SSO username shall follow the format SSO_USER_{N} where Nis an auto-incrementing integer.
+   The system must ensure that N is unique and generated atomically to prevent race conditions.
+   â¢	REQ-3.3.5 (Direct Access Logic): If Access Type is 'Direct Access', the Username field shall be an editable text input and required.
+   â¢	REQ-3.3.6: The system shall perform input validation on all fields to ensure data integrity (e.g., required fields are filled, email has a valid format).
+   3.4.
+   Request Submission and Workflow
+   â¢	REQ-3.4.1: Users shall be able to save a request as a 'Draft' or 'Submit' it for approval.
+   â¢	REQ-3.4.2: Upon submission, the request status shall change from 'Draft' to 'Submitted'.
+   â¢	REQ-3.4.3: Once submitted, a request becomes read-only for the Requester unless it is rejected by an Approver.
+   â¢	REQ-3.4.4: The system shall log the timestamp and user for every status change.
+   3.5.
+   Request Approval / Rejection
+   â¢	REQ-3.5.1: An Approver shall be able to view 'Submitted' requests.
+   â¢	REQ-3.5.2: An Approver shall have the options to 'Approve' or 'Reject' a submitted request.
+   â¢	REQ-3.5.3: If a request is approved, its status shall change to 'Approved', and the system shall trigger the external API call (see 3.7).
+   â¢	REQ-3.5.4: If a request is rejected, its status shall change to 'Rejected'. The Approver must provide a reason for rejection.
+   â¢	REQ-3.5.5: The system shall send an email notification to the Requester upon the request's approval or rejection.
+   3.6.
+   Request Editing
+   â¢	REQ-3.6.1: A user shall be able to edit a request that is in 'Draft' status.
+   â¢	REQ-3.6.2: If a request is 'Rejected', the original Requester shall be able to edit it and resubmit it for approval.
+   â¢	REQ-3.6.3: When editing a request, only the following fields shall be mutable: Username (for Direct Access), Access Type, and Request Type.
+   Other core client information shall remain locked to maintain integrity.
+   â¢	REQ-3.6.4: Editing shall be disabled for requests in 'Submitted', 'Approved', 'Processing', or 'Completed' states.
+   3.7.
+   External API Integration
+   â¢	REQ-3.7.1: Upon a request's status changing to 'Approved', the BE shall initiate an asynchronous process to call the appropriate external API.
+   â¢	REQ-3.7.2: The request status shall change to 'Processing' while the API call is in flight.
+   â¢	REQ-3.7.3: The system shall map the CARMS Request Type to the correct external API endpoint:
+   â¢	'Create Access' -> Calls External API for User Creation.
+   â¢	'Edit Access' -> Calls External API for User Modification.
+   â¢	'Delete Access' -> Calls External API for User Deletion.
+   â¢	REQ-3.7.4: The system must securely handle authentication credentials (e.g., API keys, OAuth tokens) for the external APIs.
+   â¢	REQ-3.7.5 (Success): If the API call returns a success response, the request status shall be updated to 'Completed'.
+   â¢	REQ-3.7.6 (Failure): If the API call fails or returns an error, the request status shall be updated to 'Failed'.
+   The system must log the error response from the external API for troubleshooting.
+   An alert should be sent to a System Administrator.
+   â¢	REQ-3.7.7: Following a status change to 'Completed' (per REQ-3.7.5), the system shall send an email notification to the Requester confirming the successful provisioning.
+   â¢	REQ-3.7.8: Following a status change to 'Failed' (per REQ-3.7.6), the system shall send an email notification to the Requester informing them of the failure.
+ * External Interface Requirements
+   4.1.
+   User Interfaces
+   â¢	UI-4.1.1 (Dashboard): A clean, modern table-based view of all requests with filtering, sorting, and pagination capabilities.
+   â¢	UI-4.1.2 (Request Form): An intuitive form for creating and editing requests, featuring clear labels, validation messages, and conditional field visibility based on user selections.
+   â¢	UI-4.1.3 (Request Detail View): A read-only summary of a specific request, including its complete data and a chronological history of status changes (audit trail).
+   â¢	UI-4.1.4 (Responsiveness): The UI shall be responsive and function correctly on standard desktop screen resolutions.
+   â¢	UI-4.1.5 (Feedback Messages): The UI shall display human-readable messages to confirm the success or failure of user-initiated actions (e.g., "Request submitted successfully," "Error: Invalid email format"). These messages should be clear and non-disruptive (e.g., toast notifications).
+   4.2.
+   Software Interfaces
+   â¢	SI-4.2.1 (Internal API): The C# .NET BE will provide a RESTful API for the React FE.
+   All data exchange will use the JSON format. The API will be secured and accessible only from the internal network.
+   â¢	SI-4.2.2 (External APIs): The BE will act as a client to the external systems' APIs.
+   It must be capable of making authenticated HTTPS requests and parsing JSON or XML responses as required by the external APIs.
+   â¢	SI-4.2.3 (Authentication): The BE will integrate with the corporate identity provider using a standard protocol like OpenID Connect (OIDC) to authenticate users.
+ * Non-Functional Requirements
+   5.1.
+   Performance Requirements
+   â¢	PERF-5.1.1: API response times for all interactive operations (fetching lists, viewing details) shall be less than 500ms for the 95th percentile.
+   â¢	PERF-5.1.2: FE page load times for any page shall be under 3 seconds on the corporate network.
+   â¢	PERF-5.1.3: The system must be able to handle the projected load of 100 requests per day without performance degradation.
+   Asynchronous processing of external API calls will ensure the UI remains responsive under load.
+   5.2.
+   Security Requirements
+   â¢	SEC-5.2.1: All traffic between the client (browser), FE, and BE shall be encrypted using TLS 1.2 or higher.
+   â¢	SEC-5.2.2: The application must implement robust RBAC to prevent unauthorized access to data or functionality.
+   â¢	SEC-5.2.3: All user inputs must be validated on both the FE and BE to prevent injection attacks (e.g., XSS, SQL Injection).
+   â¢	SEC-5.2.4: External API credentials and other secrets must be stored in a secure vault (e.g., Azure Key Vault, HashiCorp Vault, or .NET Secret Manager) and not in configuration files or source code.
+   â¢	SEC-5.2.5: The application must follow OWASP Top 10 security best practices.
+   5.3.
+   Reliability and Availability
+   â¢	REL-5.3.1: The application should have an uptime of 99.5% during business hours.
+   â¢	REL-5.3.2: The system must include robust error handling and logging for both internal operations and external API interactions to facilitate quick diagnosis and recovery.
+   â¢	REL-5.3.3: The BE shall implement a retry mechanism with exponential backoff for transient failures when calling external APIs.
+   5.4.
+   Maintainability and Testability
+   â¢	MAIN-5.4.1: Both FE and BE codebases must be modular, well-documented, and follow established coding standards for their respective languages/frameworks.
+   â¢	MAIN-5.4.2 (BE Testing): The .NET backend must have a comprehensive suite of unit tests for business logic and integration tests for API endpoints and database interactions.
+   A target code coverage of >80% is required.
+   â¢	MAIN-5.4.3 (FE Testing): The React frontend must have unit tests for components and utility functions and integration tests for key user flows.
+   A target code coverage of >80% is required.
+   â¢	MAIN-5.4.4: The application should have configurable logging levels to assist in debugging.
+   5.5.
+   Usability
+   â¢	USE-5.5.1: The UI/UX must be intuitive for non-technical users, requiring minimal training.
+   â¢	USE-5.5.2: The application must provide clear, human-readable feedback to the user after every action. This includes success messages (e.g., toasts), descriptive error messages, and loading indicators for ongoing processes.
+ * Appendices
+   A. System Architecture Diagram
+   +----------------+      +-------------------------+      +-------------------+
+   |                |      |                         |
+   |                   |
+   |   User Browser |      |   Internal Web Server   |      |   External APIs   |
+   |
+   (React FE SPA) |<-+-->|      (C# .NET BE)       |----->|
+   (Client Access    |
+   |                |  |   |                         |      |  System)          |
+   +----------------+  |   +------------+------------+      +-------------------+
+   |
+   |
+   HTTPS/REST              |
+   |                |
+   |
+   +------------V------------+      +-------------------+
+   |
+   |                         |      |                   |
+   +-->|    Database Server      |<---->|
+   Corporate         |
+   | (SQL Server/PostgreSQL) |      | Identity Provider |
+   |                         |
+   | (e.g., AD, Okta)  |
+   +-------------------------+      +-------------------+
+   B. Preliminary Data Model
+   A single Requests table could have the following schema:
+   CREATE TABLE Requests (
+   Id INT PRIMARY KEY IDENTITY,
+   ManagerName NVARCHAR(100) NOT NULL,
+   AccountNumber NVARCHAR(50) NOT NULL,
+   ClientName NVARCHAR(100) NOT NULL,
+   ClientEmail NVARCHAR(255) NOT NULL,
+   AccessType NVARCHAR(20) NOT NULL, -- 'SSO' or 'Direct Access'
+   RequestType NVARCHAR(20) NOT NULL, -- 'Create', 'Edit', 'Delete'
+   Username NVARCHAR(100) NOT NULL,
+   Status NVARCHAR(20) NOT NULL,
+   -- 'Draft', 'Submitted', 'Approved', 'Rejected', etc.
+   RejectionReason NVARCHAR(MAX) NULL,
+   RequesterId NVARCHAR(100) NOT NULL, -- User ID from Identity Provider
+   ApproverId NVARCHAR(100) NULL,
+   CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
+   UpdatedAt DATETIME2 NOT NULL DEFAULT GETDATE()
+   );
+   -- Separate table for SSO username sequence to handle concurrency
+   CREATE TABLE SsoSequence (
+   LastId INT NOT NULL
+   );
+   INSERT INTO SsoSequence (LastId) VALUES (0);
+   C. Request State Diagram
+   +----------+
+   |
+   Draft   |
+   +----------+
+   |
+   user submits
+   v
+   +------------+   +-----------+
+   |
+   Rejected   |<- | Submitted |
+   +------------+   +-----------+
+   ^ |              | approver approves
+   | |
+   user edits & |
+   | resubmits      |
+   +----------------+
+   v
+   +-----------+
+   |
+   Approved  |
+   +-----------+
+   |
+   system processes
+   v
+   +------------+
+   |
+   Processing |
+   +------------+
+   |
+   +----------+-----------+
+   |                      |
+   v API call fails     v API call succeeds
+   +---------+              +-----------+
+   |
+   Failed  |              | Completed |
+   +---------+              +-----------+
