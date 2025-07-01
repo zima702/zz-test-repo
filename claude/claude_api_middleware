@@ -1,0 +1,132 @@
+using System.Net;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using CARMS.Data;
+using CARMS.Models;
+using CARMS.Services;
+
+namespace CARMS.Middleware
+{
+public class ExceptionHandlingMiddleware
+{
+private readonly RequestDelegate _next;
+private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+
+```
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unhandled exception occurred");
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    {
+        context.Response.ContentType = "application/json";
+        
+        var response = new ApiResponse<object>
+        {
+            Success = false,
+            Message = "An unexpected error occurred while processing your request. Our technical team has been notified. Please try again in a few minutes.",
+            Data = null,
+            Errors = new List<string>()
+        };
+
+        switch (exception)
+        {
+            case ArgumentException argEx:
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                response.Message = "Invalid request parameters provided.";
+                response.Errors.Add(argEx.Message);
+                break;
+            
+            case UnauthorizedAccessException:
+                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                response.Message = "You are not authorized to perform this action.";
+                break;
+            
+            case KeyNotFoundException:
+                context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                response.Message = "The requested resource was not found.";
+                break;
+            
+            case DbUpdateException dbEx:
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                response.Message = "Could not save the data. Please check your input and try again.";
+                
+                // Check for specific database constraint violations
+                if (dbEx.InnerException?.Message.Contains("UNIQUE constraint") == true)
+                {
+                    response.Message = "This record already exists. Please check for duplicates.";
+                }
+                break;
+            
+            default:
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                break;
+        }
+
+        var jsonResponse = JsonSerializer.Serialize(response, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        await context.Response.WriteAsync(jsonResponse);
+    }
+}
+
+// Background service to process approved requests
+public class RequestProcessingService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<RequestProcessingService> _logger;
+    private readonly TimeSpan _processingInterval = TimeSpan.FromMinutes(1);
+
+    public RequestProcessingService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<RequestProcessingService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("Request Processing Service started");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await ProcessApprovedRequestsAsync();
+                await Task.Delay(_processingInterval, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in request processing service");
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken); // Wait longer on error
+            }
+        }
+
+        _logger.LogInformation("Request Processing Service stopped");
+    }
+
+    private async Task ProcessApprovedRequestsAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CarmsDbContext>();
+        var externalAccessService = scope.ServiceProvider.GetRequiredService<IExternalAccessService>();
+        var notificationService = scope.Service
+```
