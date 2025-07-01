@@ -1,0 +1,159 @@
+using Microsoft.EntityFrameworkCore;
+using CARMS.Models;
+
+namespace CARMS.Data
+{
+public class CarmsDbContext : DbContext
+{
+public CarmsDbContext(DbContextOptions<CarmsDbContext> options) : base(options)
+{
+}
+
+```
+    public DbSet<User> Users { get; set; }
+    public DbSet<Request> Requests { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // User Configuration
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(u => u.Id);
+            entity.HasIndex(u => u.UserId).IsUnique();
+            entity.HasIndex(u => u.Email).IsUnique();
+            
+            entity.Property(u => u.Role)
+                .HasConversion<string>();
+            
+            entity.Property(u => u.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+            
+            entity.Property(u => u.UpdatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+        });
+
+        // Request Configuration
+        modelBuilder.Entity<Request>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+            
+            entity.Property(r => r.Status)
+                .HasConversion<string>();
+            
+            entity.Property(r => r.AccessType)
+                .HasConversion<string>();
+            
+            entity.Property(r => r.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+            
+            entity.Property(r => r.UpdatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            // Relationships
+            entity.HasOne(r => r.Requester)
+                .WithMany(u => u.RequestsCreated)
+                .HasForeignKey(r => r.RequesterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Approver)
+                .WithMany(u => u.RequestsApproved)
+                .HasForeignKey(r => r.ApproverId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Indexes
+            entity.HasIndex(r => r.Status);
+            entity.HasIndex(r => r.RequesterId);
+            entity.HasIndex(r => r.ApproverId);
+            entity.HasIndex(r => r.CreatedAt);
+            entity.HasIndex(r => new { r.ClientName, r.AccountNumber });
+        });
+
+        // AuditLog Configuration
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            
+            entity.Property(a => a.FromStatus)
+                .HasConversion<string>();
+            
+            entity.Property(a => a.ToStatus)
+                .HasConversion<string>();
+            
+            entity.Property(a => a.Timestamp)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            // Relationships
+            entity.HasOne(a => a.Request)
+                .WithMany(r => r.AuditLogs)
+                .HasForeignKey(a => a.RequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.User)
+                .WithMany(u => u.AuditLogs)
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Indexes
+            entity.HasIndex(a => a.RequestId);
+            entity.HasIndex(a => a.UserId);
+            entity.HasIndex(a => a.Timestamp);
+        });
+
+        // Seed Data
+        SeedData(modelBuilder);
+    }
+
+    private void SeedData(ModelBuilder modelBuilder)
+    {
+        // Seed default admin user
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                Id = 1,
+                UserId = "admin@company.com",
+                Name = "System Administrator",
+                Email = "admin@company.com",
+                Role = UserRole.Approver,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            }
+        );
+    }
+
+    public override int SaveChanges()
+    {
+        UpdateTimestamps();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        UpdateTimestamps();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void UpdateTimestamps()
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.Entity is User || e.Entity is Request)
+            .Where(e => e.State == EntityState.Modified);
+
+        foreach (var entry in entries)
+        {
+            if (entry.Entity is User user)
+            {
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (entry.Entity is Request request)
+            {
+                request.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+    }
+}
+```
+
+}
