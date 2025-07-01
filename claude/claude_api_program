@@ -1,0 +1,140 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using CARMS.Data;
+using CARMS.Services;
+using CARMS.Middleware;
+using System.Text;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+c.SwaggerDoc(“v1”, new OpenApiInfo { Title = “CARMS API”, Version = “v1” });
+c.AddSecurityDefinition(“Bearer”, new OpenApiSecurityScheme
+{
+Description = “JWT Authorization header using the Bearer scheme”,
+Name = “Authorization”,
+In = ParameterLocation.Header,
+Type = SecuritySchemeType.ApiKey,
+Scheme = “Bearer”
+});
+c.AddSecurityRequirement(new OpenApiSecurityRequirement
+{
+{
+new OpenApiSecurityScheme
+{
+Reference = new OpenApiReference
+{
+Type = ReferenceType.SecurityScheme,
+Id = “Bearer”
+}
+},
+new string[] { }
+}
+});
+});
+
+// Database Configuration
+builder.Services.AddDbContext<CarmsDbContext>(options =>
+{
+var connectionString = builder.Configuration.GetConnectionString(“DefaultConnection”);
+options.UseSqlServer(connectionString);
+});
+
+// Authentication Configuration
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+.AddJwtBearer(options =>
+{
+options.Authority = builder.Configuration[“Authentication:Authority”];
+options.Audience = builder.Configuration[“Authentication:Audience”];
+options.RequireHttpsMetadata = true;
+
+```
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ClockSkew = TimeSpan.FromMinutes(5)
+    };
+});
+```
+
+builder.Services.AddAuthorization(options =>
+{
+options.AddPolicy(“RequesterPolicy”, policy =>
+policy.RequireClaim(“role”, “Requester”, “Approver”));
+options.AddPolicy(“ApproverPolicy”, policy =>
+policy.RequireClaim(“role”, “Approver”));
+});
+
+// HTTP Client Configuration
+builder.Services.AddHttpClient<IExternalAccessService, ExternalAccessService>(client =>
+{
+client.BaseAddress = new Uri(builder.Configuration[“ExternalApis:AccessApi:BaseUrl”]);
+client.DefaultRequestHeaders.Add(“Authorization”,
+$“Bearer {builder.Configuration[“ExternalApis:AccessApi:ApiKey”]}”);
+});
+
+builder.Services.AddHttpClient<INotificationService, NotificationService>(client =>
+{
+client.BaseAddress = new Uri(builder.Configuration[“ExternalApis:NotificationApi:BaseUrl”]);
+client.DefaultRequestHeaders.Add(“Authorization”,
+$“Bearer {builder.Configuration[“ExternalApis:NotificationApi:ApiKey”]}”);
+});
+
+// Service Registration
+builder.Services.AddScoped<IRequestService, RequestService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IExternalAccessService, ExternalAccessService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IUsernameGenerationService, UsernameGenerationService>();
+
+// Background Services
+builder.Services.AddHostedService<RequestProcessingService>();
+
+// CORS
+builder.Services.AddCors(options =>
+{
+options.AddPolicy(“AllowReactApp”, policy =>
+{
+policy.WithOrigins(builder.Configuration[“Cors:AllowedOrigins”].Split(’,’))
+.AllowAnyHeader()
+.AllowAnyMethod()
+.AllowCredentials();
+});
+});
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+app.UseSwagger();
+app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseCors(“AllowReactApp”);
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+app.MapControllers();
+
+// Database Migration
+using (var scope = app.Services.CreateScope())
+{
+var context = scope.ServiceProvider.GetRequiredService<CarmsDbContext>();
+context.Database.Migrate();
+}
+
+app.Run();
