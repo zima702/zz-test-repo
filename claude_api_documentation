@@ -1,0 +1,578 @@
+# CARMS API Documentation
+
+**Client Access Request Management System**  
+Version: 1.1  
+Date: June 30, 2025
+
+## Table of Contents
+
+- [Authentication](#authentication)
+- [Base URL](#base-url)
+- [Common Response Formats](#common-response-formats)
+- [Error Handling](#error-handling)
+- [Endpoints](#endpoints)
+  - [Authentication Endpoints](#authentication-endpoints)
+  - [Request Management](#request-management)
+  - [User Management](#user-management)
+  - [Dashboard & Analytics](#dashboard--analytics)
+  - [External API Integration](#external-api-integration)
+  - [Notification System](#notification-system)
+- [WebSocket Events](#websocket-events)
+- [Rate Limiting](#rate-limiting)
+
+## Authentication
+
+CARMS uses JWT (JSON Web Tokens) for API authentication, integrated with the corporate identity provider via OpenID Connect.
+
+### Headers Required
+
+```
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+X-Request-ID: <unique_request_id> (optional, for tracking)
+```
+
+## Base URL
+
+```
+Production: https://api.carms.company.com/v1
+Development: https://dev-api.carms.company.com/v1
+```
+
+## Common Response Formats
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operation completed successfully",
+  "timestamp": "2025-06-30T10:30:00Z",
+  "requestId": "req-123-456-789"
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "One or more fields are invalid",
+    "details": [
+      {
+        "field": "clientName",
+        "message": "Client name is required"
+      }
+    ]
+  },
+  "timestamp": "2025-06-30T10:30:00Z",
+  "requestId": "req-123-456-789"
+}
+```
+
+## Error Handling
+
+### HTTP Status Codes
+
+- `200` - OK
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `429` - Too Many Requests
+- `500` - Internal Server Error
+- `503` - Service Unavailable
+
+### Error Codes
+
+- `VALIDATION_ERROR` - Input validation failed
+- `UNAUTHORIZED` - Authentication required
+- `FORBIDDEN` - Insufficient permissions
+- `NOT_FOUND` - Resource not found
+- `CONFLICT` - Resource already exists
+- `EXTERNAL_API_ERROR` - External service error
+- `NOTIFICATION_ERROR` - Notification service error
+- `RATE_LIMIT_EXCEEDED` - Too many requests
+
+## Endpoints
+
+### Authentication Endpoints
+
+#### POST /auth/login
+
+Authenticate user with corporate credentials.
+
+**Request:**
+
+```json
+{
+  "username": "john.doe@company.com",
+  "password": "secure_password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "rt_abc123...",
+    "expiresIn": 3600,
+    "user": {
+      "id": "usr_123",
+      "username": "john.doe@company.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "roles": ["requester", "approver"],
+      "department": "IT"
+    }
+  }
+}
+```
+
+#### POST /auth/refresh
+
+Refresh JWT token using refresh token.
+
+#### POST /auth/logout
+
+Invalidate current session.
+
+### Request Management
+
+#### GET /requests
+
+Get paginated list of requests based on user role and permissions.
+
+**Query Parameters:**
+
+- `page` (int): Page number (default: 1)
+- `limit` (int): Items per page (default: 20, max: 100)
+- `status` (string): Filter by status (draft, submitted, approved, rejected, processing, completed, failed)
+- `clientName` (string): Filter by client name
+- `requestedBy` (string): Filter by requester
+- `dateFrom` (string): Filter from date (ISO 8601)
+- `dateTo` (string): Filter to date (ISO 8601)
+- `sortBy` (string): Sort field (createdAt, updatedAt, clientName, status)
+- `sortOrder` (string): Sort order (asc, desc)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "requests": [
+      {
+        "id": "req_001",
+        "clientName": "Acme Corporation",
+        "contactEmail": "contact@acmecorp.com",
+        "accountNumber": "ACC-12345",
+        "accessType": "sso",
+        "accessLevel": "read_write",
+        "status": "submitted",
+        "urgency": "normal",
+        "businessJustification": "Client needs access to portal...",
+        "additionalNotes": "Setup required by EOD",
+        "requestedBy": {
+          "id": "usr_123",
+          "name": "John Doe",
+          "email": "john.doe@company.com"
+        },
+        "approvedBy": null,
+        "createdAt": "2025-06-30T10:30:00Z",
+        "updatedAt": "2025-06-30T10:35:00Z",
+        "submittedAt": "2025-06-30T10:35:00Z",
+        "timeline": [
+          {
+            "status": "draft",
+            "timestamp": "2025-06-30T10:30:00Z",
+            "userId": "usr_123",
+            "notes": "Request created"
+          },
+          {
+            "status": "submitted",
+            "timestamp": "2025-06-30T10:35:00Z",
+            "userId": "usr_123",
+            "notes": "Submitted for approval"
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45,
+      "totalPages": 3,
+      "hasNext": true,
+      "hasPrev": false
+    }
+  }
+}
+```
+
+#### GET /requests/{id}
+
+Get specific request details.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "req_001",
+    "clientName": "Acme Corporation",
+    // ... full request details as above
+    "auditLog": [
+      {
+        "action": "created",
+        "userId": "usr_123",
+        "userName": "John Doe",
+        "timestamp": "2025-06-30T10:30:00Z",
+        "details": "Request created"
+      },
+      {
+        "action": "submitted",
+        "userId": "usr_123",
+        "userName": "John Doe",
+        "timestamp": "2025-06-30T10:35:00Z",
+        "details": "Request submitted for approval"
+      }
+    ]
+  }
+}
+```
+
+#### POST /requests
+
+Create a new access request.
+
+**Request:**
+
+```json
+{
+  "clientName": "Acme Corporation",
+  "contactEmail": "contact@acmecorp.com",
+  "accountNumber": "ACC-12345",
+  "department": "finance",
+  "accessType": "sso",
+  "accessLevel": "read_write",
+  "urgency": "normal",
+  "businessJustification": "Client needs access to portal for account management",
+  "additionalNotes": "Setup required by end of day",
+  "autoGenerateUsername": true
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "req_001",
+    "status": "draft",
+    "generatedUsername": "acme_corp_001",
+    // ... other request fields
+  },
+  "message": "Request created successfully"
+}
+```
+
+#### PUT /requests/{id}
+
+Update an existing request (only allowed for draft or rejected requests).
+
+#### POST /requests/{id}/submit
+
+Submit a request for approval.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "req_001",
+    "status": "submitted",
+    "submittedAt": "2025-06-30T10:35:00Z"
+  },
+  "message": "Request submitted successfully"
+}
+```
+
+#### POST /requests/{id}/approve
+
+Approve a submitted request (approver only).
+
+**Request:**
+
+```json
+{
+  "approvalNotes": "Access approved for standard business use"
+}
+```
+
+#### POST /requests/{id}/reject
+
+Reject a submitted request (approver only).
+
+**Request:**
+
+```json
+{
+  "rejectionReason": "Insufficient business justification provided",
+  "rejectionNotes": "Please provide more details about the business need"
+}
+```
+
+#### DELETE /requests/{id}
+
+Delete a draft request (requester only).
+
+### User Management
+
+#### GET /users/profile
+
+Get current user profile.
+
+#### PUT /users/profile
+
+Update current user profile.
+
+#### GET /users/{id}/requests
+
+Get requests for a specific user.
+
+### Dashboard & Analytics
+
+#### GET /dashboard/stats
+
+Get dashboard statistics for current user.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "totalRequests": 24,
+    "pendingApproval": 8,
+    "processing": 3,
+    "completed": 13,
+    "failed": 0,
+    "myRequests": {
+      "draft": 2,
+      "submitted": 5,
+      "approved": 8,
+      "rejected": 1,
+      "completed": 8
+    },
+    "recentActivity": [
+      {
+        "requestId": "req_001",
+        "clientName": "Acme Corp",
+        "action": "submitted",
+        "timestamp": "2025-06-30T10:35:00Z"
+      }
+    ]
+  }
+}
+```
+
+#### GET /dashboard/analytics
+
+Get detailed analytics (admin/manager only).
+
+**Query Parameters:**
+
+- `period` (string): Time period (7d, 30d, 90d, 1y)
+- `groupBy` (string): Group by field (status, accessType, department)
+
+### External API Integration
+
+#### GET /external/apis
+
+Get list of configured external APIs.
+
+#### POST /external/apis/{apiId}/test
+
+Test connection to external API.
+
+#### GET /requests/{id}/external-status
+
+Get external API call status for a request.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestId": "req_001",
+    "externalApiCalls": [
+      {
+        "apiName": "SSO_PROVISIONING_API",
+        "status": "success",
+        "requestSent": "2025-06-30T11:00:00Z",
+        "responseReceived": "2025-06-30T11:00:15Z",
+        "responseCode": 201,
+        "responseMessage": "User created successfully",
+        "externalId": "ext_user_12345"
+      }
+    ]
+  }
+}
+```
+
+### Notification System
+
+#### POST /notifications/send
+
+Send manual notification (admin only).
+
+**Request:**
+
+```json
+{
+  "recipients": ["john.doe@company.com"],
+  "subject": "Request Update",
+  "message": "Your request has been processed",
+  "priority": "normal",
+  "template": "request_update",
+  "templateData": {
+    "requestId": "req_001",
+    "clientName": "Acme Corp"
+  }
+}
+```
+
+#### GET /notifications/templates
+
+Get available notification templates.
+
+#### GET /notifications/history/{requestId}
+
+Get notification history for a request.
+
+## WebSocket Events
+
+Real-time updates via WebSocket connection at `/ws`
+
+### Connection
+
+```javascript
+const ws = new WebSocket('wss://api.carms.company.com/ws');
+ws.addEventListener('open', () => {
+  // Send authentication
+  ws.send(JSON.stringify({
+    type: 'auth',
+    token: 'your_jwt_token'
+  }));
+});
+```
+
+### Event Types
+
+#### Request Status Update
+
+```json
+{
+  "type": "request_status_update",
+  "data": {
+    "requestId": "req_001",
+    "oldStatus": "submitted",
+    "newStatus": "approved",
+    "timestamp": "2025-06-30T11:00:00Z",
+    "updatedBy": "manager@company.com"
+  }
+}
+```
+
+#### Notification Received
+
+```json
+{
+  "type": "notification",
+  "data": {
+    "id": "notif_001",
+    "title": "Request Approved",
+    "message": "Your request #REQ-001 has been approved",
+    "priority": "normal",
+    "timestamp": "2025-06-30T11:00:00Z",
+    "requestId": "req_001"
+  }
+}
+```
+
+## Rate Limiting
+
+- Standard users: 100 requests per minute
+- Approvers: 200 requests per minute
+- Admins: 500 requests per minute
+- External API calls: Limited by external service constraints
+
+### Rate Limit Headers
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640995200
+```
+
+## Sample Integration Code
+
+### JavaScript/Node.js
+
+```javascript
+const axios = require('axios');
+
+class CARMSClient {
+  constructor(baseURL, token) {
+    this.client = axios.create({
+      baseURL,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+
+  async createRequest(requestData) {
+    try {
+      const response = await this.client.post('/requests', requestData);
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create request: ${error.response.data.error.message}`);
+    }
+  }
+
+  async getRequests(filters = {}) {
+    const response = await this.client.get('/requests', { params: filters });
+    return response.data;
+  }
+
+  async approveRequest(requestId, notes) {
+    const response = await this.client.post(`/requests/${requestId}/approve`, {
+      approvalNotes: notes
+    });
+    return response.data;
+  }
+}
+
+// Usage
+const carms = new CARMSClient('https://api.carms.company.com/v1', 'your_jwt_token');
+
+// Create a request
+const newRequest = await carms.createRequest({
+  clientName: 'Acme
+```
