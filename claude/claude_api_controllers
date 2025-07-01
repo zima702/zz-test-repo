@@ -1,0 +1,228 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using CARMS.Models;
+using CARMS.Services;
+
+namespace CARMS.Controllers
+{
+[ApiController]
+[Route(“api/[controller]”)]
+[Authorize]
+public class RequestsController : ControllerBase
+{
+private readonly IRequestService _requestService;
+private readonly IUserService _userService;
+private readonly ILogger<RequestsController> _logger;
+
+```
+    public RequestsController(
+        IRequestService requestService,
+        IUserService userService,
+        ILogger<RequestsController> logger)
+    {
+        _requestService = requestService;
+        _userService = userService;
+        _logger = logger;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<ApiResponse<List<RequestDto>>>> GetRequests()
+    {
+        var (userId, userRole) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.GetRequestsAsync(userId, userRole);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<ApiResponse<RequestDto>>> GetRequest(int id)
+    {
+        var (userId, userRole) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.GetRequestByIdAsync(id, userId, userRole);
+        if (!result.Success)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    [HttpPost]
+    [Authorize(Policy = "RequesterPolicy")]
+    public async Task<ActionResult<ApiResponse<RequestDto>>> CreateRequest([FromBody] CreateRequestDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(CreateValidationErrorResponse());
+
+        var (userId, _) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.CreateRequestAsync(dto, userId);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return CreatedAtAction(nameof(GetRequest), new { id = result.Data.Id }, result);
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Policy = "RequesterPolicy")]
+    public async Task<ActionResult<ApiResponse<RequestDto>>> UpdateRequest(int id, [FromBody] UpdateRequestDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(CreateValidationErrorResponse());
+
+        var (userId, _) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.UpdateRequestAsync(id, dto, userId);
+        if (!result.Success)
+        {
+            return result.Message.Contains("not found") || result.Message.Contains("access denied") 
+                ? NotFound(result) 
+                : BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("{id}/submit")]
+    [Authorize(Policy = "RequesterPolicy")]
+    public async Task<ActionResult<ApiResponse<RequestDto>>> SubmitRequest(int id)
+    {
+        var (userId, _) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.SubmitRequestAsync(id, userId);
+        if (!result.Success)
+        {
+            return result.Message.Contains("not found") || result.Message.Contains("access denied") 
+                ? NotFound(result) 
+                : BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("{id}/approve")]
+    [Authorize(Policy = "ApproverPolicy")]
+    public async Task<ActionResult<ApiResponse<RequestDto>>> ApproveOrRejectRequest(int id, [FromBody] ApprovalDecisionDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(CreateValidationErrorResponse());
+
+        var (userId, userRole) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.ApproveOrRejectRequestAsync(id, dto, userId);
+        if (!result.Success)
+        {
+            return result.Message.Contains("not found") 
+                ? NotFound(result) 
+                : BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpGet("{id}/audit")]
+    public async Task<ActionResult<ApiResponse<List<AuditLogDto>>>> GetRequestAuditLog(int id)
+    {
+        var (userId, userRole) = await GetUserInfoAsync();
+        if (userId == null)
+            return Unauthorized();
+
+        var result = await _requestService.GetRequestAuditLogAsync(id, userId, userRole);
+        if (!result.Success)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    private async Task<(string? userId, UserRole userRole)> GetUserInfoAsync()
+    {
+        try
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                ?? User.FindFirst("sub")?.Value;
+            var userName = User.FindFirst(ClaimTypes.Name)?.Value 
+                ?? User.FindFirst("name")?.Value;
+            var userEmail = User.FindFirst(ClaimTypes.Email)?.Value 
+                ?? User.FindFirst("email")?.Value;
+            var userRoleClaim = User.FindFirst(ClaimTypes.Role)?.Value 
+                ?? User.FindFirst("role")?.Value;
+
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(userEmail))
+                return (null, UserRole.Requester);
+
+            // Default to Requester role if not specified
+            var userRole = Enum.TryParse<UserRole>(userRoleClaim, true, out var role) 
+                ? role 
+                : UserRole.Requester;
+
+            // Ensure user exists in database
+            await _userService.GetOrCreateUserAsync(userId, userName, userEmail, userRole);
+
+            return (userId, userRole);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting user info from claims");
+            return (null, UserRole.Requester);
+        }
+    }
+
+    private ApiResponse<RequestDto> CreateValidationErrorResponse()
+    {
+        var errors = ModelState.Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage)
+            .ToList();
+
+        return ApiResponse<RequestDto>.ErrorResult(
+            "Please check your input and correct any errors before submitting.", 
+            errors);
+    }
+}
+
+[ApiController]
+[Route("api/[controller]")]
+public class HealthController : ControllerBase
+{
+    private readonly ILogger<HealthController> _logger;
+
+    public HealthController(ILogger<HealthController> logger)
+    {
+        _logger = logger;
+    }
+
+    [HttpGet]
+    public IActionResult Get()
+    {
+        return Ok(new { 
+            Status = "Healthy", 
+            Timestamp = DateTime.UtcNow,
+            Version = "1.0.0"
+        });
+    }
+
+    [HttpGet("ready")]
+    public IActionResult Ready()
+    {
+        // Add any readiness checks here (database connectivity, etc.)
+        return Ok(new { 
+            Status = "Ready", 
+            Timestamp = DateTime.UtcNow 
+        });
+    }
+}
+```
+
+}
