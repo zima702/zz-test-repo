@@ -1,0 +1,283 @@
+using Microsoft.EntityFrameworkCore;
+using CARMS.Data;
+using CARMS.Models;
+using System.Text.Json;
+
+namespace CARMS.Services
+{
+// Service Interfaces
+public interface IRequestService
+{
+Task<ApiResponse<List<RequestDto>>> GetRequestsAsync(string userId, UserRole userRole);
+Task<ApiResponse<RequestDto>> GetRequestByIdAsync(int id, string userId, UserRole userRole);
+Task<ApiResponse<RequestDto>> CreateRequestAsync(CreateRequestDto dto, string userId);
+Task<ApiResponse<RequestDto>> UpdateRequestAsync(int id, UpdateRequestDto dto, string userId);
+Task<ApiResponse<RequestDto>> SubmitRequestAsync(int id, string userId);
+Task<ApiResponse<RequestDto>> ApproveOrRejectRequestAsync(int id, ApprovalDecisionDto dto, string userId);
+Task<ApiResponse<List<AuditLogDto>>> GetRequestAuditLogAsync(int id, string userId, UserRole userRole);
+}
+
+```
+public interface IUserService
+{
+    Task<User?> GetOrCreateUserAsync(string userId, string name, string email, UserRole role);
+    Task<User?> GetUserByIdAsync(string userId);
+}
+
+public interface IExternalAccessService
+{
+    Task<ExternalAccessResponse> CreateAccessAsync(ExternalAccessRequest request);
+    Task<ExternalAccessResponse> UpdateAccessAsync(ExternalAccessRequest request);
+    Task<ExternalAccessResponse> DeleteAccessAsync(string accessId);
+}
+
+public interface INotificationService
+{
+    Task<bool> SendNotificationAsync(NotificationRequest notification);
+}
+
+public interface IUsernameGenerationService
+{
+    Task<string> GenerateUsernameAsync(string clientName, AccessType accessType);
+}
+
+// Service Implementations
+public class RequestService : IRequestService
+{
+    private readonly CarmsDbContext _context;
+    private readonly INotificationService _notificationService;
+    private readonly IUsernameGenerationService _usernameService;
+    private readonly ILogger<RequestService> _logger;
+    private readonly IConfiguration _configuration;
+
+    public RequestService(
+        CarmsDbContext context,
+        INotificationService notificationService,
+        IUsernameGenerationService usernameService,
+        ILogger<RequestService> logger,
+        IConfiguration configuration)
+    {
+        _context = context;
+        _notificationService = notificationService;
+        _usernameService = usernameService;
+        _logger = logger;
+        _configuration = configuration;
+    }
+
+    public async Task<ApiResponse<List<RequestDto>>> GetRequestsAsync(string userId, UserRole userRole)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return ApiResponse<List<RequestDto>>.ErrorResult("User not found");
+
+            IQueryable<Request> query = _context.Requests
+                .Include(r => r.Requester)
+                .Include(r => r.Approver);
+
+            // Filter based on user role
+            if (userRole == UserRole.Requester)
+            {
+                query = query.Where(r => r.RequesterId == user.Id);
+            }
+            // Approvers can see all submitted requests plus their own
+
+            var requests = await query
+                .OrderByDescending(r => r.UpdatedAt)
+                .Select(r => new RequestDto
+                {
+                    Id = r.Id,
+                    ClientName = r.ClientName,
+                    AccountNumber = r.AccountNumber,
+                    AccessType = r.AccessType.ToString(),
+                    GeneratedUsername = r.GeneratedUsername,
+                    Description = r.Description,
+                    Status = r.Status.ToString(),
+                    RequesterName = r.Requester.Name,
+                    ApproverName = r.Approver != null ? r.Approver.Name : null,
+                    RejectionReason = r.RejectionReason,
+                    CreatedAt = r.CreatedAt,
+                    UpdatedAt = r.UpdatedAt,
+                    SubmittedAt = r.SubmittedAt,
+                    ApprovedAt = r.ApprovedAt,
+                    RejectedAt = r.RejectedAt,
+                    CompletedAt = r.CompletedAt
+                })
+                .ToListAsync();
+
+            return ApiResponse<List<RequestDto>>.SuccessResult(requests);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving requests for user {UserId}", userId);
+            return ApiResponse<List<RequestDto>>.ErrorResult("An error occurred while retrieving requests");
+        }
+    }
+
+    public async Task<ApiResponse<RequestDto>> GetRequestByIdAsync(int id, string userId, UserRole userRole)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return ApiResponse<RequestDto>.ErrorResult("User not found");
+
+            var request = await _context.Requests
+                .Include(r => r.Requester)
+                .Include(r => r.Approver)
+                .Where(r => r.Id == id)
+                .Where(r => userRole == UserRole.Approver || r.RequesterId == user.Id)
+                .FirstOrDefaultAsync();
+
+            if (request == null)
+                return ApiResponse<RequestDto>.ErrorResult("Request not found or access denied");
+
+            var dto = new RequestDto
+            {
+                Id = request.Id,
+                ClientName = request.ClientName,
+                AccountNumber = request.AccountNumber,
+                AccessType = request.AccessType.ToString(),
+                GeneratedUsername = request.GeneratedUsername,
+                Description = request.Description,
+                Status = request.Status.ToString(),
+                RequesterName = request.Requester.Name,
+                ApproverName = request.Approver?.Name,
+                RejectionReason = request.RejectionReason,
+                CreatedAt = request.CreatedAt,
+                UpdatedAt = request.UpdatedAt,
+                SubmittedAt = request.SubmittedAt,
+                ApprovedAt = request.ApprovedAt,
+                RejectedAt = request.RejectedAt,
+                CompletedAt = request.CompletedAt
+            };
+
+            return ApiResponse<RequestDto>.SuccessResult(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving request {RequestId} for user {UserId}", id, userId);
+            return ApiResponse<RequestDto>.ErrorResult("An error occurred while retrieving the request");
+        }
+    }
+
+    public async Task<ApiResponse<RequestDto>> CreateRequestAsync(CreateRequestDto dto, string userId)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return ApiResponse<RequestDto>.ErrorResult("User not found");
+
+            // Generate username for SSO access types
+            string? generatedUsername = null;
+            if (dto.AccessType == AccessType.SSO)
+            {
+                generatedUsername = await _usernameService.GenerateUsernameAsync(dto.ClientName, dto.AccessType);
+            }
+
+            var request = new Request
+            {
+                ClientName = dto.ClientName,
+                AccountNumber = dto.AccountNumber,
+                AccessType = dto.AccessType,
+                GeneratedUsername = generatedUsername,
+                Description = dto.Description,
+                Status = RequestStatus.Draft,
+                RequesterId = user.Id
+            };
+
+            _context.Requests.Add(request);
+            await _context.SaveChangesAsync();
+
+            // Add audit log
+            await AddAuditLogAsync(request.Id, user.Id, "Created", RequestStatus.Draft, RequestStatus.Draft);
+
+            // Load related data for response
+            await _context.Entry(request).Reference(r => r.Requester).LoadAsync();
+
+            var responseDto = new RequestDto
+            {
+                Id = request.Id,
+                ClientName = request.ClientName,
+                AccountNumber = request.AccountNumber,
+                AccessType = request.AccessType.ToString(),
+                GeneratedUsername = request.GeneratedUsername,
+                Description = request.Description,
+                Status = request.Status.ToString(),
+                RequesterName = request.Requester.Name,
+                CreatedAt = request.CreatedAt,
+                UpdatedAt = request.UpdatedAt
+            };
+
+            return ApiResponse<RequestDto>.SuccessResult(responseDto, 
+                $"Request #{request.Id} for {request.ClientName} has been created successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating request for user {UserId}", userId);
+            return ApiResponse<RequestDto>.ErrorResult("An error occurred while creating the request");
+        }
+    }
+
+    public async Task<ApiResponse<RequestDto>> UpdateRequestAsync(int id, UpdateRequestDto dto, string userId)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return ApiResponse<RequestDto>.ErrorResult("User not found");
+
+            var request = await _context.Requests
+                .Include(r => r.Requester)
+                .Where(r => r.Id == id && r.RequesterId == user.Id)
+                .FirstOrDefaultAsync();
+
+            if (request == null)
+                return ApiResponse<RequestDto>.ErrorResult("Request not found or access denied");
+
+            // Only allow editing of Draft or Rejected requests
+            if (request.Status != RequestStatus.Draft && request.Status != RequestStatus.Rejected)
+                return ApiResponse<RequestDto>.ErrorResult("This request cannot be edited in its current status");
+
+            var oldStatus = request.Status;
+
+            // Update request fields
+            request.ClientName = dto.ClientName;
+            request.AccountNumber = dto.AccountNumber;
+            request.AccessType = dto.AccessType;
+            request.Description = dto.Description;
+
+            // Regenerate username if access type changed to SSO
+            if (dto.AccessType == AccessType.SSO && string.IsNullOrEmpty(request.GeneratedUsername))
+            {
+                request.GeneratedUsername = await _usernameService.GenerateUsernameAsync(dto.ClientName, dto.AccessType);
+            }
+            else if (dto.AccessType != AccessType.SSO)
+            {
+                request.GeneratedUsername = null;
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Add audit log
+            await AddAuditLogAsync(request.Id, user.Id, "Updated", oldStatus, request.Status);
+
+            var responseDto = new RequestDto
+            {
+                Id = request.Id,
+                ClientName = request.ClientName,
+                AccountNumber = request.AccountNumber,
+                AccessType = request.AccessType.ToString(),
+                GeneratedUsername = request.GeneratedUsername,
+                Description = request.Description,
+                Status = request.Status.ToString(),
+                RequesterName = request.Requester.Name,
+                CreatedAt = request.CreatedAt,
+                UpdatedAt = request.UpdatedAt
+            };
+
+            return ApiResponse<RequestDto>.SuccessResult(responseDto,
+                $"
+```
